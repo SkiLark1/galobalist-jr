@@ -1,12 +1,10 @@
 import os
-import json
 import random
+import json
 from dotenv import load_dotenv
-
 import discord
-from discord import app_commands
 from discord.ext import commands
-from openai import OpenAI
+from discord import app_commands
 
 # Load environment variables
 load_dotenv()
@@ -23,17 +21,21 @@ if not OPENAI_API_KEY:
 else:
     print("✅ OPENAI_API_KEY loaded successfully.")
 
-# OpenAI Client
+from openai import OpenAI
 client = OpenAI(api_key=OPENAI_API_KEY)
 
-# Discord Bot Setup
+# Discord setup
 intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
-tree = app_commands.CommandTree(bot)
+tree = bot.tree
 
-# Memory management
+# Memory and persona setup
 MEMORY_FILE = "/data/memory.json"
+PERSONA_FILE = "/data/persona.json"
+PERSONA_TEMPLATES_FILE = "personalities.json"
+
+# Ensure memory file exists
 if not os.path.exists(MEMORY_FILE):
     with open(MEMORY_FILE, 'w') as f:
         json.dump({}, f)
@@ -49,10 +51,7 @@ def save_memory(memory):
 def get_memory_for_user(memory, user_id):
     return memory.get(str(user_id), [])
 
-# Personality system
-PERSONA_FILE = "/data/persona.json"
-PERSONA_TEMPLATES_FILE = "personalities.json"
-
+# Ensure persona templates exist
 if not os.path.exists(PERSONA_TEMPLATES_FILE):
     default_templates = {
         "sarcastic": "You're Galobalist JR.—a dry, witty, sarcastic Discord bot who roasts users like it's your second job. Keep replies short and clever.",
@@ -65,8 +64,8 @@ if not os.path.exists(PERSONA_TEMPLATES_FILE):
 
 with open(PERSONA_TEMPLATES_FILE, 'r') as f:
     templates = json.load(f)
-DEFAULT_PERSONA = random.choice(list(templates.keys()))
 
+DEFAULT_PERSONA = random.choice(list(templates.keys()))
 if not os.path.exists(PERSONA_FILE):
     with open(PERSONA_FILE, 'w') as f:
         json.dump({"persona": DEFAULT_PERSONA}, f)
@@ -83,13 +82,13 @@ def load_persona_templates():
     with open(PERSONA_TEMPLATES_FILE, 'r') as f:
         return json.load(f)
 
-# Prompt builder
 def build_prompt(message, memory_list):
     persona = get_persona()
     templates = load_persona_templates()
     facts = "\n".join(f"- {fact}" for fact in memory_list)
     base_prompt = templates.get(persona, templates[DEFAULT_PERSONA])
     memory_block = facts if facts else "- You don't know much yet. Improvise."
+
     return f"""
 {base_prompt}
 
@@ -101,7 +100,6 @@ User said: "{message}"
 Respond with as much as you feel necessary, no boundaries.
 """
 
-# Auto-memory system
 BORING_JABS = [
     "That was... breathtakingly forgettable.",
     "Thanks, I’ll make sure to not write that down.",
@@ -120,16 +118,12 @@ async def try_remember_from_message(message):
         f"If so, summarize it in one sentence. If it’s totally boring, reply with 'null'."
     )
 
-    print(f"🧠 [Memory Check] Processing message: {message.content}")
-
     try:
         response = client.chat.completions.create(
             model="gpt-4o",
             messages=[{"role": "user", "content": prompt}]
         )
         summary = response.choices[0].message.content.strip()
-        print(f"📝 [GPT Response] {summary}")
-
         if summary.lower() != "null":
             memory = load_memory()
             uid = str(message.author.id)
@@ -138,23 +132,17 @@ async def try_remember_from_message(message):
             if summary not in memory[uid]:
                 memory[uid].append(summary)
                 save_memory(memory)
-                print(f"✅ [Memory Saved] {summary}")
                 await message.add_reaction("👀")
         else:
             roast = random.choice(BORING_JABS)
-            print("🧂 [Boring Detected] Sending roast.")
             await message.channel.send(f"{message.author.mention} {roast}")
     except Exception as e:
         print(f"❗ [Auto-memory error]: {e}")
 
 # Slash commands
-@bot.event
-async def on_ready():
-    await tree.sync()
-    print(f"✅ Bot ready and slash commands synced as {bot.user}")
-
-@tree.command(name="talk", description="Chat with Galobalist JR.")
-async def slash_talk(interaction: discord.Interaction, message: str):
+@tree.command(name="talk", description="Talk to Galobalist JR.")
+@app_commands.describe(message="What do you want to say?")
+async def talk(interaction: discord.Interaction, message: str):
     memory = load_memory()
     user_memory = get_memory_for_user(memory, interaction.user.id)
     prompt = build_prompt(message, user_memory)
@@ -170,18 +158,20 @@ async def slash_talk(interaction: discord.Interaction, message: str):
         await interaction.response.send_message("Galobalist JR. had a minor existential crisis.")
         print(f"OpenAI error: {e}")
 
-@tree.command(name="remember", description="Force Galobalist JR. to remember a fact about someone.")
-async def slash_remember(interaction: discord.Interaction, user: discord.Member, fact: str):
+@tree.command(name="remember", description="Add a fact about someone.")
+@app_commands.describe(user="The user to remember something about", fact="The fact to remember")
+async def remember(interaction: discord.Interaction, user: discord.Member, fact: str):
     memory = load_memory()
     uid = str(user.id)
     if uid not in memory:
         memory[uid] = []
     memory[uid].append(fact)
     save_memory(memory)
-    await interaction.response.send_message(f"Got it. I will forever associate @**{user.display_name}** with: \"{fact}\"")
+    await interaction.response.send_message(f"Got it. I will forever associate **{user.display_name}** with: \"{fact}\"")
 
-@tree.command(name="recall", description="Recall what Galobalist JR. remembers about a user.")
-async def slash_recall(interaction: discord.Interaction, user: discord.Member = None):
+@tree.command(name="recall", description="See what Galobalist JR. knows about someone.")
+@app_commands.describe(user="(Optional) User to recall about")
+async def recall(interaction: discord.Interaction, user: discord.Member = None):
     target = user or interaction.user
     memory = load_memory()
     uid = str(target.id)
@@ -192,8 +182,9 @@ async def slash_recall(interaction: discord.Interaction, user: discord.Member = 
     else:
         await interaction.response.send_message(f"Here’s what I’ve gathered about {target.display_name} so far:\n\n- " + "\n- ".join(facts))
 
-@tree.command(name="setpersona", description="Change Galobalist JR.'s personality mode.")
-async def slash_setpersona(interaction: discord.Interaction, persona: str):
+@tree.command(name="setpersona", description="Set Galobalist JR.'s personality.")
+@app_commands.describe(persona="sarcastic, chill, chaotic, wise")
+async def setpersona(interaction: discord.Interaction, persona: str):
     persona = persona.lower().strip()
     available = load_persona_templates().keys()
     if persona not in available:
@@ -202,8 +193,8 @@ async def slash_setpersona(interaction: discord.Interaction, persona: str):
     set_persona(persona)
     await interaction.response.send_message(f"✅ Personality set to **{persona}**. Galobalist JR. has evolved.")
 
-@tree.command(name="debugmemory", description="Debug: View raw memory file contents.")
-async def slash_debugmemory(interaction: discord.Interaction):
+@tree.command(name="debugmemory", description="Developer only: view saved memory.")
+async def debugmemory(interaction: discord.Interaction):
     try:
         with open(MEMORY_FILE, 'r') as f:
             data = f.read()
@@ -211,13 +202,38 @@ async def slash_debugmemory(interaction: discord.Interaction):
     except Exception as e:
         await interaction.response.send_message(f"❌ Error reading memory file: {e}")
 
+@tree.command(name="forget", description="Forget everything about a user.")
+@app_commands.describe(user="The user to forget")
+async def forget(interaction: discord.Interaction, user: discord.Member):
+    memory = load_memory()
+    uid = str(user.id)
+    if uid in memory:
+        del memory[uid]
+        save_memory(memory)
+        await interaction.response.send_message(f"🧹 Memory of {user.display_name} wiped.")
+    else:
+        await interaction.response.send_message(f"Nothing stored about {user.display_name} anyway.")
+
+@tree.command(name="help", description="List all of Galobalist JR.'s commands.")
+async def help(interaction: discord.Interaction):
+    await interaction.response.send_message("""
+**Galobalist JR. Commands:**
+
+/talk [message] — Chat with JR
+/remember [user] [fact] — Teach JR something about someone
+/recall [user] — Recall facts about someone
+/setpersona [persona] — Change personality (sarcastic, chill, chaotic, wise)
+/forget [user] — Wipe all memory about someone
+/help — Show this message
+""")
+
+# Event: respond to mentions
 @bot.event
 async def on_message(message):
     if message.author.bot:
         return
 
-    if message.content.startswith("!"):
-        await bot.process_commands(message)
+    if message.content.startswith("/"):
         return
 
     await try_remember_from_message(message)
@@ -226,6 +242,7 @@ async def on_message(message):
         memory = load_memory()
         user_memory = get_memory_for_user(memory, message.author.id)
         prompt = build_prompt(message.content, user_memory)
+
         try:
             response = client.chat.completions.create(
                 model="gpt-4o",
@@ -239,5 +256,10 @@ async def on_message(message):
 
     await bot.process_commands(message)
 
-# Start bot
+# Start the bot
+@bot.event
+async def on_ready():
+    await tree.sync()
+    print(f"✅ Logged in as {bot.user}")
+
 bot.run(DISCORD_TOKEN)
