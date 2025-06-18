@@ -1,9 +1,15 @@
 import os
-from dotenv import load_dotenv
+import json
 import random
+from dotenv import load_dotenv
 
+import discord
+from discord import app_commands
+from discord.ext import commands
+from openai import OpenAI
+
+# Load environment variables
 load_dotenv()
-
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
@@ -17,18 +23,16 @@ if not OPENAI_API_KEY:
 else:
     print("✅ OPENAI_API_KEY loaded successfully.")
 
-from openai import OpenAI
-import discord
-from discord.ext import commands
-import json
-
+# OpenAI Client
 client = OpenAI(api_key=OPENAI_API_KEY)
 
+# Discord Bot Setup
 intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
+tree = app_commands.CommandTree(bot)
 
-# Load memory
+# Memory management
 MEMORY_FILE = "/data/memory.json"
 if not os.path.exists(MEMORY_FILE):
     with open(MEMORY_FILE, 'w') as f:
@@ -42,8 +46,6 @@ def save_memory(memory):
     with open(MEMORY_FILE, 'w') as f:
         json.dump(memory, f, indent=2)
 
-print(f"[Debug] Memory saved to: {MEMORY_FILE}")
-
 def get_memory_for_user(memory, user_id):
     return memory.get(str(user_id), [])
 
@@ -51,7 +53,6 @@ def get_memory_for_user(memory, user_id):
 PERSONA_FILE = "/data/persona.json"
 PERSONA_TEMPLATES_FILE = "personalities.json"
 
-# Step 1: create personalities file if it doesn't exist
 if not os.path.exists(PERSONA_TEMPLATES_FILE):
     default_templates = {
         "sarcastic": "You're Galobalist JR.—a dry, witty, sarcastic Discord bot who roasts users like it's your second job. Keep replies short and clever.",
@@ -62,14 +63,10 @@ if not os.path.exists(PERSONA_TEMPLATES_FILE):
     with open(PERSONA_TEMPLATES_FILE, 'w') as f:
         json.dump(default_templates, f, indent=2)
 
-# Step 2: load templates, now guaranteed to exist
 with open(PERSONA_TEMPLATES_FILE, 'r') as f:
     templates = json.load(f)
-
-# Step 3: pick a default persona
 DEFAULT_PERSONA = random.choice(list(templates.keys()))
 
-# Step 4: create persona.json if needed
 if not os.path.exists(PERSONA_FILE):
     with open(PERSONA_FILE, 'w') as f:
         json.dump({"persona": DEFAULT_PERSONA}, f)
@@ -87,14 +84,12 @@ def load_persona_templates():
         return json.load(f)
 
 # Prompt builder
-
 def build_prompt(message, memory_list):
     persona = get_persona()
     templates = load_persona_templates()
     facts = "\n".join(f"- {fact}" for fact in memory_list)
     base_prompt = templates.get(persona, templates[DEFAULT_PERSONA])
     memory_block = facts if facts else "- You don't know much yet. Improvise."
-
     return f"""
 {base_prompt}
 
@@ -106,6 +101,7 @@ User said: "{message}"
 Respond with as much as you feel necessary, no boundaries.
 """
 
+# Auto-memory system
 BORING_JABS = [
     "That was... breathtakingly forgettable.",
     "Thanks, I’ll make sure to not write that down.",
@@ -137,17 +133,13 @@ async def try_remember_from_message(message):
         if summary.lower() != "null":
             memory = load_memory()
             uid = str(message.author.id)
-
             if uid not in memory:
                 memory[uid] = []
-
             if summary not in memory[uid]:
                 memory[uid].append(summary)
                 save_memory(memory)
                 print(f"✅ [Memory Saved] {summary}")
                 await message.add_reaction("👀")
-            else:
-                print("⚠️ [Duplicate] Memory already known.")
         else:
             roast = random.choice(BORING_JABS)
             print("🧂 [Boring Detected] Sending roast.")
@@ -155,11 +147,16 @@ async def try_remember_from_message(message):
     except Exception as e:
         print(f"❗ [Auto-memory error]: {e}")
 
-# Commands
-@bot.command(name='talk')
-async def talk(ctx, *, message):
+# Slash commands
+@bot.event
+async def on_ready():
+    await tree.sync()
+    print(f"✅ Bot ready and slash commands synced as {bot.user}")
+
+@tree.command(name="talk", description="Chat with Galobalist JR.")
+async def slash_talk(interaction: discord.Interaction, message: str):
     memory = load_memory()
-    user_memory = get_memory_for_user(memory, ctx.author.id)
+    user_memory = get_memory_for_user(memory, interaction.user.id)
     prompt = build_prompt(message, user_memory)
 
     try:
@@ -168,59 +165,57 @@ async def talk(ctx, *, message):
             messages=[{"role": "user", "content": prompt}]
         )
         reply = response.choices[0].message.content.strip()
-        await ctx.send(reply)
+        await interaction.response.send_message(reply)
     except Exception as e:
-        await ctx.send("Galobalist JR. had a minor existential crisis.")
+        await interaction.response.send_message("Galobalist JR. had a minor existential crisis.")
         print(f"OpenAI error: {e}")
 
-@bot.command(name='remember')
-async def remember(ctx, user: discord.Member, *, fact):
+@tree.command(name="remember", description="Force Galobalist JR. to remember a fact about someone.")
+async def slash_remember(interaction: discord.Interaction, user: discord.Member, fact: str):
     memory = load_memory()
     uid = str(user.id)
     if uid not in memory:
         memory[uid] = []
     memory[uid].append(fact)
     save_memory(memory)
-    await ctx.send(f"Got it. I will forever associate @**{user.display_name}** with: \"{fact}\"")
+    await interaction.response.send_message(f"Got it. I will forever associate @**{user.display_name}** with: \"{fact}\"")
 
-@bot.command(name='recall')
-async def recall(ctx, user: discord.Member = None):
-    target = user or ctx.author
+@tree.command(name="recall", description="Recall what Galobalist JR. remembers about a user.")
+async def slash_recall(interaction: discord.Interaction, user: discord.Member = None):
+    target = user or interaction.user
     memory = load_memory()
     uid = str(target.id)
     facts = memory.get(uid)
 
     if not facts:
-        await ctx.send(f"Galobalist JR. knows nothing about {target.display_name}. Yet. 👀")
+        await interaction.response.send_message(f"Galobalist JR. knows nothing about {target.display_name}. Yet. 👀")
     else:
-        await ctx.send(f"Here’s what I’ve gathered about {target.display_name} so far:\n\n- " + "\n- ".join(facts))
+        await interaction.response.send_message(f"Here’s what I’ve gathered about {target.display_name} so far:\n\n- " + "\n- ".join(facts))
 
-@bot.command(name='setpersona')
-async def setpersona(ctx, *, persona):
+@tree.command(name="setpersona", description="Change Galobalist JR.'s personality mode.")
+async def slash_setpersona(interaction: discord.Interaction, persona: str):
     persona = persona.lower().strip()
     available = load_persona_templates().keys()
     if persona not in available:
-        await ctx.send(f"Unknown persona '{persona}'. Try one of: {', '.join(available)}")
+        await interaction.response.send_message(f"Unknown persona '{persona}'. Try one of: {', '.join(available)}")
         return
     set_persona(persona)
-    await ctx.send(f"✅ Personality set to **{persona}**. Galobalist JR. has evolved.")
+    await interaction.response.send_message(f"✅ Personality set to **{persona}**. Galobalist JR. has evolved.")
 
-@bot.command(name='debugmemory')
-async def debugmemory(ctx):
+@tree.command(name="debugmemory", description="Debug: View raw memory file contents.")
+async def slash_debugmemory(interaction: discord.Interaction):
     try:
         with open(MEMORY_FILE, 'r') as f:
             data = f.read()
-        await ctx.send(f"Memory file contents:\n```json\n{data[:1800]}```")
+        await interaction.response.send_message(f"Memory file contents:\n```json\n{data[:1800]}```")
     except Exception as e:
-        await ctx.send(f"❌ Error reading memory file: {e}")
-
+        await interaction.response.send_message(f"❌ Error reading memory file: {e}")
 
 @bot.event
 async def on_message(message):
     if message.author.bot:
         return
 
-    # Skip auto-memory if message starts with a command prefix
     if message.content.startswith("!"):
         await bot.process_commands(message)
         return
@@ -231,7 +226,6 @@ async def on_message(message):
         memory = load_memory()
         user_memory = get_memory_for_user(memory, message.author.id)
         prompt = build_prompt(message.content, user_memory)
-
         try:
             response = client.chat.completions.create(
                 model="gpt-4o",
@@ -245,5 +239,5 @@ async def on_message(message):
 
     await bot.process_commands(message)
 
-# Run the bot
+# Start bot
 bot.run(DISCORD_TOKEN)
