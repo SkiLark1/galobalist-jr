@@ -119,7 +119,7 @@ async def try_remember_from_message(message):
 
     try:
         response = client.chat.completions.create(
-            model="gpt-3.5-turbo",
+            model="gpt-4o",
             messages=[{"role": "user", "content": prompt}]
         )
         summary = response.choices[0].message.content.strip()
@@ -155,7 +155,7 @@ async def talk(ctx, *, message):
 
     try:
         response = client.chat.completions.create(
-            model="gpt-3.5-turbo",
+            model="gpt-4o",
             messages=[{"role": "user", "content": prompt}]
         )
         reply = response.choices[0].message.content.strip()
@@ -215,7 +215,7 @@ async def on_message(message):
 
         try:
             response = client.chat.completions.create(
-                model="gpt-3.5-turbo",
+                model="gpt-4o",
                 messages=[{"role": "user", "content": prompt}]
             )
             reply = response.choices[0].message.content.strip()
