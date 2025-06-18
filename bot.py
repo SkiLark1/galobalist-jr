@@ -97,7 +97,9 @@ Respond with as much as you feel necessary, no boundaries.
 
 # Auto-memory logic
 async def try_remember_from_message(message):
-    prompt = f"The following message was posted in a Discord server: \"{message.content}\"\nIf this message contains a fun or memorable fact about the author, summarize it in one sentence.\nOtherwise, reply with 'null'."
+    prompt = f'The following message was posted in a Discord server: "{message.content}"\nIf this message contains a fun or memorable fact about the author, summarize it in one sentence.\nOtherwise, reply with "null".'
+
+    print(f"🧠 [Memory Check] Processing message: {message.content}")
 
     try:
         response = client.chat.completions.create(
@@ -105,18 +107,26 @@ async def try_remember_from_message(message):
             messages=[{"role": "user", "content": prompt}]
         )
         summary = response.choices[0].message.content.strip()
+        print(f"📝 [GPT Response] {summary}")
+
         if summary.lower() != "null":
             memory = load_memory()
             uid = str(message.author.id)
+
             if uid not in memory:
                 memory[uid] = []
+
             if summary not in memory[uid]:
                 memory[uid].append(summary)
                 save_memory(memory)
+                print(f"✅ [Memory Saved] {summary}")
                 await message.add_reaction("👀")
+            else:
+                print("⚠️ [Duplicate] Memory already known.")
+        else:
+            print("❌ [Not Memorable] Skipping.")
     except Exception as e:
-        print(f"Auto-memory error: {e}")
-
+        print(f"❗ [Auto-memory error]: {e}")
 # Commands
 @bot.command(name='talk')
 async def talk(ctx, *, message):
