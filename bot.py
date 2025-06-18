@@ -13,8 +13,8 @@ if not DISCORD_TOKEN:
     print("❌ ERROR: DISCORD_TOKEN is missing.")
 else:
     print(f"✅ DISCORD_TOKEN loaded successfully.")
-    
-OPENAI_API_KEY = "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"
+
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
 if not OPENAI_API_KEY:
     print("❌ ERROR: OPENAI_API_KEY is missing.")
