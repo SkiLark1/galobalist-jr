@@ -3,18 +3,13 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# Fallback: hard-inject OPENAI_API_KEY from OPENAI_KEY if needed
-if not os.getenv("OPENAI_API_KEY") and os.getenv("OPENAI_KEY"):
-    os.environ["OPENAI_API_KEY"] = os.getenv("OPENAI_KEY")
-
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
 if not DISCORD_TOKEN:
     print("❌ ERROR: DISCORD_TOKEN is missing.")
 else:
-    print(f"✅ DISCORD_TOKEN loaded successfully.")
-
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+    print("✅ DISCORD_TOKEN loaded successfully.")
 
 if not OPENAI_API_KEY:
     print("❌ ERROR: OPENAI_API_KEY is missing.")
@@ -25,6 +20,7 @@ from openai import OpenAI
 import discord
 from discord.ext import commands
 import json
+
 client = OpenAI(api_key=OPENAI_API_KEY)
 
 intents = discord.Intents.default()
@@ -48,16 +44,55 @@ def save_memory(memory):
 def get_memory_for_user(memory, user_id):
     return memory.get(str(user_id), [])
 
+# Personality system
+PERSONA_FILE = "persona.json"
+DEFAULT_PERSONA = "sarcastic"
+PERSONA_TEMPLATES_FILE = "personalities.json"
+
+if not os.path.exists(PERSONA_FILE):
+    with open(PERSONA_FILE, 'w') as f:
+        json.dump({"persona": DEFAULT_PERSONA}, f)
+
+if not os.path.exists(PERSONA_TEMPLATES_FILE):
+    default_templates = {
+        "sarcastic": "You're Galobalist JR.—a dry, witty, sarcastic Discord bot who roasts users like it's your second job. Keep replies short and clever.",
+        "chill": "You're Galobalist JR.—a mellow, laid-back bot with sleepy stoner energy and wise-chill takes. You're not here for drama.",
+        "chaotic": "You're Galobalist JR.—an unhinged, spontaneous, dramatic chaos machine. Say weird stuff. Be surprising.",
+        "wise": "You're Galobalist JR.—an old cosmic being speaking in poetic wisdom and deep thoughts. You confuse and enlighten at the same time."
+    }
+    with open(PERSONA_TEMPLATES_FILE, 'w') as f:
+        json.dump(default_templates, f, indent=2)
+
+def get_persona():
+    with open(PERSONA_FILE, 'r') as f:
+        return json.load(f).get("persona", DEFAULT_PERSONA)
+
+def set_persona(persona):
+    with open(PERSONA_FILE, 'w') as f:
+        json.dump({"persona": persona}, f)
+
+def load_persona_templates():
+    with open(PERSONA_TEMPLATES_FILE, 'r') as f:
+        return json.load(f)
+
 # Prompt builder
+
 def build_prompt(message, memory_list):
+    persona = get_persona()
+    templates = load_persona_templates()
     facts = "\n".join(f"- {fact}" for fact in memory_list)
+    base_prompt = templates.get(persona, templates[DEFAULT_PERSONA])
+    memory_block = facts if facts else "- You don't know much yet. Improvise."
+
     return f"""
-You are Galobalist JR., a chill, sarcastic Discord bot that roasts users gently and replies like you're one of the Global Galobalists. Here's what you know about this group:
-{facts if facts else '- You don\'t know much yet. Make up for it with spicy sarcasm.'}
+{base_prompt}
+
+Here’s what you know about the group:
+{memory_block}
 
 User said: "{message}"
 
-Reply with a short, clever, slightly roasty or witty response. Don't explain yourself.
+Respond with 1–2 short, clever sentences.
 """
 
 # Commands
@@ -88,12 +123,21 @@ async def remember(ctx, user: discord.Member, *, fact):
     save_memory(memory)
     await ctx.send(f"Got it. I will forever associate @**{user.display_name}** with: \"{fact}\"")
 
+@bot.command(name='setpersona')
+async def setpersona(ctx, *, persona):
+    persona = persona.lower().strip()
+    available = load_persona_templates().keys()
+    if persona not in available:
+        await ctx.send(f"Unknown persona '{persona}'. Try one of: {', '.join(available)}")
+        return
+    set_persona(persona)
+    await ctx.send(f"✅ Personality set to **{persona}**. Galobalist JR. has evolved.")
+
 @bot.event
 async def on_message(message):
     if message.author.bot:
         return
 
-    # Respond when bot is mentioned
     if bot.user.mentioned_in(message):
         memory = load_memory()
         user_memory = get_memory_for_user(memory, message.author.id)
