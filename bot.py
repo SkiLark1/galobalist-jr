@@ -7,11 +7,13 @@ load_dotenv()
 if not os.getenv("OPENAI_API_KEY") and os.getenv("OPENAI_KEY"):
     os.environ["OPENAI_API_KEY"] = os.getenv("OPENAI_KEY")
 
-DISCORD_TOKEN = "MTM4NDY3MzU2MzY5MjM2ODAwNA.Gt_yOc.0tV8OC-KXhqScCY0b5C31C3xW-3uTwAoT52cUM"
+DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
+
 if not DISCORD_TOKEN:
     print("❌ ERROR: DISCORD_TOKEN is missing.")
 else:
     print(f"✅ DISCORD_TOKEN loaded successfully.")
+    
 OPENAI_API_KEY = "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"
 
 if not OPENAI_API_KEY:
