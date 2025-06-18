@@ -3,7 +3,10 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# Load environment variables early for debugging
+# Fallback: hard-inject OPENAI_API_KEY from OPENAI_KEY if needed
+if not os.getenv("OPENAI_API_KEY") and os.getenv("OPENAI_KEY"):
+    os.environ["OPENAI_API_KEY"] = os.getenv("OPENAI_KEY")
+
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
