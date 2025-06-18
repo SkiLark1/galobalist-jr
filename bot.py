@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 import discord
 from discord.ext import commands
 from discord import app_commands
+from openai import OpenAI
 
 # Load environment variables
 load_dotenv()
@@ -21,13 +22,13 @@ if not OPENAI_API_KEY:
 else:
     print("✅ OPENAI_API_KEY loaded successfully.")
 
-from openai import OpenAI
+# OpenAI Client
 client = OpenAI(api_key=OPENAI_API_KEY)
 
 # Discord setup
 intents = discord.Intents.default()
 intents.message_content = True
-bot = commands.Bot(command_prefix="!", intents=intents)
+bot = commands.Bot(command_prefix="/", intents=intents)
 tree = bot.tree
 
 # Memory and persona setup
@@ -35,7 +36,6 @@ MEMORY_FILE = "/data/memory.json"
 PERSONA_FILE = "/data/persona.json"
 PERSONA_TEMPLATES_FILE = "personalities.json"
 
-# Ensure memory file exists
 if not os.path.exists(MEMORY_FILE):
     with open(MEMORY_FILE, 'w') as f:
         json.dump({}, f)
@@ -51,7 +51,6 @@ def save_memory(memory):
 def get_memory_for_user(memory, user_id):
     return memory.get(str(user_id), [])
 
-# Ensure persona templates exist
 if not os.path.exists(PERSONA_TEMPLATES_FILE):
     default_templates = {
         "sarcastic": "You're Galobalist JR.—a dry, witty, sarcastic Discord bot who roasts users like it's your second job. Keep replies short and clever.",
@@ -95,7 +94,7 @@ def build_prompt(message, memory_list):
 Here’s what you know about the group:
 {memory_block}
 
-User said: "{message}"
+User said: \"{message}\"
 
 Respond with as much as you feel necessary, no boundaries.
 """
@@ -112,10 +111,11 @@ BORING_JABS = [
 
 async def try_remember_from_message(message):
     prompt = (
-        f'This message was posted in a Discord server: "{message.content}"\n\n'
-        f"Does it contain any fun, unusual, interesting, or revealing information about the sender? "
-        f"Even mildly personal or quirky facts count — be generous. "
-        f"If so, summarize it in one sentence. If it’s totally boring, reply with 'null'."
+        f'You are a friendly and observant Discord bot. Here is a message someone sent: "{message.content}"\n\n'
+        f"Try to extract any mildly personal, interesting, funny, emotional, or quirky detail from it. "
+        f"Even vague or subtle things are worth remembering if they add personality. "
+        f"If you can, summarize that detail in one short sentence. "
+        f"If there’s absolutely nothing notable at all, respond only with: null"
     )
 
     try:
@@ -124,7 +124,7 @@ async def try_remember_from_message(message):
             messages=[{"role": "user", "content": prompt}]
         )
         summary = response.choices[0].message.content.strip()
-        if summary.lower() != "null":
+        if summary.lower() != "null" and len(summary) > 5:
             memory = load_memory()
             uid = str(message.author.id)
             if uid not in memory:
@@ -230,10 +230,7 @@ async def help(interaction: discord.Interaction):
 # Event: respond to mentions
 @bot.event
 async def on_message(message):
-    if message.author.bot:
-        return
-
-    if message.content.startswith("/"):
+    if message.author.bot or message.content.startswith("/"):
         return
 
     await try_remember_from_message(message)
@@ -256,7 +253,7 @@ async def on_message(message):
 
     await bot.process_commands(message)
 
-# Start the bot
+# Bot is ready
 @bot.event
 async def on_ready():
     await tree.sync()
