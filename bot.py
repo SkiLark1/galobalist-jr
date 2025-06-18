@@ -28,7 +28,7 @@ intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 # Load memory
-MEMORY_FILE = "memory.json"
+MEMORY_FILE = "/data/memory.json"
 if not os.path.exists(MEMORY_FILE):
     with open(MEMORY_FILE, 'w') as f:
         json.dump({}, f)
@@ -41,12 +41,14 @@ def save_memory(memory):
     with open(MEMORY_FILE, 'w') as f:
         json.dump(memory, f, indent=2)
 
+print(f"[Debug] Memory saved to: {MEMORY_FILE}")
+
 def get_memory_for_user(memory, user_id):
     return memory.get(str(user_id), [])
 
 # Personality system
-PERSONA_FILE = "persona.json"
-DEFAULT_PERSONA = "sarcastic"
+PERSONA_FILE = "/data/persona.json"
+DEFAULT_PERSONA = random(PERSONA_FILE)
 PERSONA_TEMPLATES_FILE = "personalities.json"
 
 if not os.path.exists(PERSONA_FILE):
@@ -195,6 +197,16 @@ async def setpersona(ctx, *, persona):
         return
     set_persona(persona)
     await ctx.send(f"✅ Personality set to **{persona}**. Galobalist JR. has evolved.")
+
+@bot.command(name='debugmemory')
+async def debugmemory(ctx):
+    try:
+        with open(MEMORY_FILE, 'r') as f:
+            data = f.read()
+        await ctx.send(f"Memory file contents:\n```json\n{data[:1800]}```")
+    except Exception as e:
+        await ctx.send(f"❌ Error reading memory file: {e}")
+        
 
 @bot.event
 async def on_message(message):
