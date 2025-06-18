@@ -95,6 +95,28 @@ User said: "{message}"
 Respond with 1–2 short, clever sentences.
 """
 
+# Auto-memory logic
+async def try_remember_from_message(message):
+    prompt = f"The following message was posted in a Discord server: \"{message.content}\"\nIf this message contains a fun or memorable fact about the author, summarize it in one sentence.\nOtherwise, reply with 'null'."
+
+    try:
+        response = client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[{"role": "user", "content": prompt}]
+        )
+        summary = response.choices[0].message.content.strip()
+        if summary.lower() != "null":
+            memory = load_memory()
+            uid = str(message.author.id)
+            if uid not in memory:
+                memory[uid] = []
+            if summary not in memory[uid]:
+                memory[uid].append(summary)
+                save_memory(memory)
+                await message.add_reaction("👀")
+    except Exception as e:
+        print(f"Auto-memory error: {e}")
+
 # Commands
 @bot.command(name='talk')
 async def talk(ctx, *, message):
@@ -137,6 +159,8 @@ async def setpersona(ctx, *, persona):
 async def on_message(message):
     if message.author.bot:
         return
+
+    await try_remember_from_message(message)
 
     if bot.user.mentioned_in(message):
         memory = load_memory()
