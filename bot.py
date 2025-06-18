@@ -8,7 +8,7 @@ if not os.getenv("OPENAI_API_KEY") and os.getenv("OPENAI_KEY"):
     os.environ["OPENAI_API_KEY"] = os.getenv("OPENAI_KEY")
 
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+OPENAI_API_KEY = "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"
 
 if not OPENAI_API_KEY:
     print("❌ ERROR: OPENAI_API_KEY is missing.")
