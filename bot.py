@@ -95,9 +95,25 @@ User said: "{message}"
 Respond with as much as you feel necessary, no boundaries.
 """
 
-# Auto-memory logic
+import random
+
+BORING_JABS = [
+    "That was... breathtakingly forgettable.",
+    "Thanks, I’ll make sure to not write that down.",
+    "I’d remember that if I had lower standards.",
+    "Cool story. Nobody asked.",
+    "Even Clippy wouldn't save that one.",
+    "If boredom were a message, that'd be it.",
+    "Next time, try harder to be legendary."
+]
+
 async def try_remember_from_message(message):
-    prompt = f'The following message was posted in a Discord server: "{message.content}"\nIf this message contains a fun or memorable fact about the author, summarize it in one sentence.\nOtherwise, reply with "null".'
+    prompt = (
+        f'This message was posted in a Discord server: "{message.content}"\n\n'
+        f"Does it contain any fun, unusual, interesting, or revealing information about the sender? "
+        f"Even mildly personal or quirky facts count — be generous. "
+        f"If so, summarize it in one sentence. If it’s totally boring, reply with 'null'."
+    )
 
     print(f"🧠 [Memory Check] Processing message: {message.content}")
 
@@ -124,9 +140,12 @@ async def try_remember_from_message(message):
             else:
                 print("⚠️ [Duplicate] Memory already known.")
         else:
-            print("❌ [Not Memorable] Skipping.")
+            roast = random.choice(BORING_JABS)
+            print("🧂 [Boring Detected] Sending roast.")
+            await message.channel.send(f"{message.author.mention} {roast}")
     except Exception as e:
         print(f"❗ [Auto-memory error]: {e}")
+        
 # Commands
 @bot.command(name='talk')
 async def talk(ctx, *, message):
