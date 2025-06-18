@@ -28,14 +28,15 @@ client = OpenAI(api_key=OPENAI_API_KEY)
 # Discord setup
 intents = discord.Intents.default()
 intents.message_content = True
-bot = commands.Bot(command_prefix="/", intents=intents)
+bot = commands.Bot(command_prefix="!", intents=intents)
 tree = bot.tree
 
-# Memory and persona setup
+# File paths
 MEMORY_FILE = "/data/memory.json"
 PERSONA_FILE = "/data/persona.json"
 PERSONA_TEMPLATES_FILE = "personalities.json"
 
+# Ensure memory file exists
 if not os.path.exists(MEMORY_FILE):
     with open(MEMORY_FILE, 'w') as f:
         json.dump({}, f)
@@ -51,12 +52,12 @@ def save_memory(memory):
 def get_memory_for_user(memory, user_id):
     return memory.get(str(user_id), [])
 
+# Setup persona templates
 if not os.path.exists(PERSONA_TEMPLATES_FILE):
     default_templates = {
-        "sarcastic": "You're Galobalist JR.—a dry, witty, sarcastic Discord bot who roasts users like it's your second job. Keep replies short and clever.",
-        "chill": "You're Galobalist JR.—a mellow, laid-back bot with sleepy stoner energy and wise-chill takes. You're not here for drama.",
-        "chaotic": "You're Galobalist JR.—an unhinged, spontaneous, dramatic chaos machine. Say weird stuff. Be surprising.",
-        "wise": "You're Galobalist JR.—an old cosmic being speaking in poetic wisdom and deep thoughts. You confuse and enlighten at the same time."
+        "sarcastic": "You're Galobalist JR.—a dry, witty, sarcastic Discord bot who roasts users like it's your second job. Keep replies short and clever. Never explain anything seriously.",
+        "chill": "You're Galobalist JR.—a mellow, laid-back bot with sleepy stoner energy. Drop wisdom like smoke rings. Minimal effort, maximum vibe.",
+        "chaotic": "You're Galobalist JR.—an unhinged, spontaneous, dramatic chaos machine. Say weird stuff. Roast and scream at random."
     }
     with open(PERSONA_TEMPLATES_FILE, 'w') as f:
         json.dump(default_templates, f, indent=2)
@@ -84,10 +85,9 @@ def load_persona_templates():
 def build_prompt(message, memory_list):
     persona = get_persona()
     templates = load_persona_templates()
-    facts = "\n".join(f"- {fact}" for fact in memory_list)
     base_prompt = templates.get(persona, templates[DEFAULT_PERSONA])
+    facts = "\n".join(f"- {fact}" for fact in memory_list)
     memory_block = facts if facts else "- You don't know much yet. Improvise."
-
     return f"""
 {base_prompt}
 
@@ -96,7 +96,7 @@ Here’s what you know about the group:
 
 User said: \"{message}\"
 
-Respond with as much as you feel necessary, no boundaries.
+Stay in character. Keep it under 2-3 sentences. Prioritize wit over accuracy.
 """
 
 BORING_JABS = [
@@ -111,11 +111,8 @@ BORING_JABS = [
 
 async def try_remember_from_message(message):
     prompt = (
-        f'You are a friendly and observant Discord bot. Here is a message someone sent: "{message.content}"\n\n'
-        f"Try to extract any mildly personal, interesting, funny, emotional, or quirky detail from it. "
-        f"Even vague or subtle things are worth remembering if they add personality. "
-        f"If you can, summarize that detail in one short sentence. "
-        f"If there’s absolutely nothing notable at all, respond only with: null"
+        f'This was posted in Discord: "{message.content}"\n\n'
+        f"Is there any personal, memorable, or spicy info about the sender? If yes, summarize it in 1 line. Otherwise reply 'null'."
     )
 
     try:
@@ -124,7 +121,8 @@ async def try_remember_from_message(message):
             messages=[{"role": "user", "content": prompt}]
         )
         summary = response.choices[0].message.content.strip()
-        if summary.lower() != "null" and len(summary) > 5:
+
+        if summary.lower() != "null" and 4 <= len(summary.split()) <= 30:
             memory = load_memory()
             uid = str(message.author.id)
             if uid not in memory:
@@ -137,7 +135,7 @@ async def try_remember_from_message(message):
             roast = random.choice(BORING_JABS)
             await message.channel.send(f"{message.author.mention} {roast}")
     except Exception as e:
-        print(f"❗ [Auto-memory error]: {e}")
+        print(f"[Auto-memory error]: {e}")
 
 # Slash commands
 @tree.command(name="talk", description="Talk to Galobalist JR.")
@@ -146,7 +144,6 @@ async def talk(interaction: discord.Interaction, message: str):
     memory = load_memory()
     user_memory = get_memory_for_user(memory, interaction.user.id)
     prompt = build_prompt(message, user_memory)
-
     try:
         response = client.chat.completions.create(
             model="gpt-4o",
@@ -155,11 +152,11 @@ async def talk(interaction: discord.Interaction, message: str):
         reply = response.choices[0].message.content.strip()
         await interaction.response.send_message(reply)
     except Exception as e:
-        await interaction.response.send_message("Galobalist JR. had a minor existential crisis.")
+        await interaction.response.send_message("Galobalist JR. choked on his own thoughts.")
         print(f"OpenAI error: {e}")
 
 @tree.command(name="remember", description="Add a fact about someone.")
-@app_commands.describe(user="The user to remember something about", fact="The fact to remember")
+@app_commands.describe(user="The user to remember", fact="The fact to remember")
 async def remember(interaction: discord.Interaction, user: discord.Member, fact: str):
     memory = load_memory()
     uid = str(user.id)
@@ -167,23 +164,27 @@ async def remember(interaction: discord.Interaction, user: discord.Member, fact:
         memory[uid] = []
     memory[uid].append(fact)
     save_memory(memory)
-    await interaction.response.send_message(f"Got it. I will forever associate **{user.display_name}** with: \"{fact}\"")
+    await interaction.response.send_message(f"✅ Noted. {user.display_name} = '{fact}'")
 
-@tree.command(name="recall", description="See what Galobalist JR. knows about someone.")
-@app_commands.describe(user="(Optional) User to recall about")
+@tree.command(name="recall", description="See what Galobalist JR. remembers.")
+@app_commands.describe(user="User to recall (optional)")
 async def recall(interaction: discord.Interaction, user: discord.Member = None):
     target = user or interaction.user
     memory = load_memory()
     uid = str(target.id)
     facts = memory.get(uid)
-
     if not facts:
-        await interaction.response.send_message(f"Galobalist JR. knows nothing about {target.display_name}. Yet. 👀")
+        comebacks = [
+            f"{target.display_name}? Yeah, that one's a blank.",
+            f"Bro's a mystery wrapped in a mid post.",
+            f"Even my circuits got nothing on {target.display_name}.",
+        ]
+        await interaction.response.send_message(random.choice(comebacks))
     else:
         await interaction.response.send_message(f"Here’s what I’ve gathered about {target.display_name} so far:\n\n- " + "\n- ".join(facts))
 
-@tree.command(name="setpersona", description="Set Galobalist JR.'s personality.")
-@app_commands.describe(persona="sarcastic, chill, chaotic, wise")
+@tree.command(name="setpersona", description="Set Galobalist JR.'s vibe.")
+@app_commands.describe(persona="sarcastic, chill, chaotic")
 async def setpersona(interaction: discord.Interaction, persona: str):
     persona = persona.lower().strip()
     available = load_persona_templates().keys()
@@ -191,18 +192,9 @@ async def setpersona(interaction: discord.Interaction, persona: str):
         await interaction.response.send_message(f"Unknown persona '{persona}'. Try one of: {', '.join(available)}")
         return
     set_persona(persona)
-    await interaction.response.send_message(f"✅ Personality set to **{persona}**. Galobalist JR. has evolved.")
+    await interaction.response.send_message(f"✅ Personality set to **{persona}**.")
 
-@tree.command(name="debugmemory", description="Developer only: view saved memory.")
-async def debugmemory(interaction: discord.Interaction):
-    try:
-        with open(MEMORY_FILE, 'r') as f:
-            data = f.read()
-        await interaction.response.send_message(f"Memory file contents:\n```json\n{data[:1800]}```")
-    except Exception as e:
-        await interaction.response.send_message(f"❌ Error reading memory file: {e}")
-
-@tree.command(name="forget", description="Forget everything about a user.")
+@tree.command(name="forget", description="Wipe memory about someone.")
 @app_commands.describe(user="The user to forget")
 async def forget(interaction: discord.Interaction, user: discord.Member):
     memory = load_memory()
@@ -212,34 +204,31 @@ async def forget(interaction: discord.Interaction, user: discord.Member):
         save_memory(memory)
         await interaction.response.send_message(f"🧹 Memory of {user.display_name} wiped.")
     else:
-        await interaction.response.send_message(f"Nothing stored about {user.display_name} anyway.")
+        await interaction.response.send_message(f"Galobalist JR. already forgot about {user.display_name}.")
 
-@tree.command(name="help", description="List all of Galobalist JR.'s commands.")
+@tree.command(name="help", description="Show command list.")
 async def help(interaction: discord.Interaction):
     await interaction.response.send_message("""
-**Galobalist JR. Commands:**
+**Galobalist JR. Slash Commands:**
 
 /talk [message] — Chat with JR
 /remember [user] [fact] — Teach JR something about someone
 /recall [user] — Recall facts about someone
-/setpersona [persona] — Change personality (sarcastic, chill, chaotic, wise)
-/forget [user] — Wipe all memory about someone
-/help — Show this message
+/setpersona [persona] — Change JR's personality
+/forget [user] — Wipe memory of someone
+/help — Show this list
 """)
 
-# Event: respond to mentions
+# Message handler
 @bot.event
 async def on_message(message):
     if message.author.bot or message.content.startswith("/"):
         return
-
     await try_remember_from_message(message)
-
     if bot.user.mentioned_in(message):
         memory = load_memory()
         user_memory = get_memory_for_user(memory, message.author.id)
         prompt = build_prompt(message.content, user_memory)
-
         try:
             response = client.chat.completions.create(
                 model="gpt-4o",
@@ -248,12 +237,10 @@ async def on_message(message):
             reply = response.choices[0].message.content.strip()
             await message.channel.send(reply)
         except Exception as e:
-            await message.channel.send("Even I can't process what you just said.")
+            await message.channel.send("Even I can't process that nonsense.")
             print(f"Mention error: {e}")
-
     await bot.process_commands(message)
 
-# Bot is ready
 @bot.event
 async def on_ready():
     await tree.sync()
