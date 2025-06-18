@@ -92,7 +92,7 @@ Here’s what you know about the group:
 
 User said: "{message}"
 
-Respond with 1–2 short, clever sentences.
+Respond with as much as you feel necessary, no boundaries.
 """
 
 # Auto-memory logic
@@ -144,6 +144,16 @@ async def remember(ctx, user: discord.Member, *, fact):
     memory[uid].append(fact)
     save_memory(memory)
     await ctx.send(f"Got it. I will forever associate @**{user.display_name}** with: \"{fact}\"")
+
+@bot.command(name='recall')
+async def recall(ctx, user: discord.Member):
+    memory = load_memory()
+    uid = str(user.id)
+    facts = memory.get(uid)
+    if not facts:
+        await ctx.send(f"Galobalist JR. knows nothing about {user.display_name}. Yet. 👀")
+    else:
+        await ctx.send(f"Here’s what I’ve gathered about {user.display_name} so far:\n\n- " + "\n- ".join(facts))
 
 @bot.command(name='setpersona')
 async def setpersona(ctx, *, persona):
