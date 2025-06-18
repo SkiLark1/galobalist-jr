@@ -5,9 +5,9 @@ load_dotenv()
 
 # Load environment variables early for debugging
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
-OPENAI_KEY = os.getenv("OPENAI_API_KEY")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
-if not OPENAI_KEY:
+if not OPENAI_API_KEY:
     print("❌ ERROR: OPENAI_API_KEY is missing.")
 else:
     print("✅ OPENAI_API_KEY loaded successfully.")
@@ -16,7 +16,7 @@ from openai import OpenAI
 import discord
 from discord.ext import commands
 import json
-client = OpenAI(api_key=OPENAI_KEY)
+client = OpenAI(api_key=OPENAI_API_KEY)
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -104,4 +104,4 @@ async def on_message(message):
     await bot.process_commands(message)
 
 # Run the bot
-bot.run(TOKEN)
+bot.run(DISCORD_TOKEN)
