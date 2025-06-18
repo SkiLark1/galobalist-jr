@@ -145,7 +145,7 @@ async def try_remember_from_message(message):
             await message.channel.send(f"{message.author.mention} {roast}")
     except Exception as e:
         print(f"❗ [Auto-memory error]: {e}")
-        
+
 # Commands
 @bot.command(name='talk')
 async def talk(ctx, *, message):
@@ -199,6 +199,11 @@ async def setpersona(ctx, *, persona):
 @bot.event
 async def on_message(message):
     if message.author.bot:
+        return
+
+    # Skip auto-memory if message starts with a command prefix
+    if message.content.startswith("!"):
+        await bot.process_commands(message)
         return
 
     await try_remember_from_message(message)
