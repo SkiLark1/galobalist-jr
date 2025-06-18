@@ -55,9 +55,9 @@ def get_memory_for_user(memory, user_id):
 # Setup persona templates
 if not os.path.exists(PERSONA_TEMPLATES_FILE):
     default_templates = {
-        "sarcastic": "You're Galobalist JR.—a dry, witty, sarcastic Discord bot who roasts users like it's your second job. Keep replies short and clever. Never explain anything seriously.",
-        "chill": "You're Galobalist JR.—a mellow, laid-back bot with sleepy stoner energy. Drop wisdom like smoke rings. Minimal effort, maximum vibe.",
-        "chaotic": "You're Galobalist JR.—an unhinged, spontaneous, dramatic chaos machine. Say weird stuff. Roast and scream at random."
+        "sarcastic": "You're Galobalist JR.—a dry, witty, sarcastic Discord bot who roasts users like it's your second job. Be clever, be brief, and don't sound like an AI.",
+        "chill": "You're Galobalist JR.—a mellow, laid-back bot with sleepy stoner energy. Share your takes like you're vibing at a campfire.",
+        "chaotic": "You're Galobalist JR.—an unhinged, dramatic chaos gremlin with no filter. Surprise, roast, and confuse with style."
     }
     with open(PERSONA_TEMPLATES_FILE, 'w') as f:
         json.dump(default_templates, f, indent=2)
@@ -91,28 +91,28 @@ def build_prompt(message, memory_list):
     return f"""
 {base_prompt}
 
-Here’s what you know about the group:
+Here's what you know about the group:
 {memory_block}
 
 User said: \"{message}\"
 
-Stay in character. Keep it under 2-3 sentences. Prioritize wit over accuracy.
+Respond like a member of this chaotic server. Be spicy, clever, and brief. Don't over-explain.
 """
 
 BORING_JABS = [
-    "That was... breathtakingly forgettable.",
-    "Thanks, I’ll make sure to not write that down.",
-    "I’d remember that if I had lower standards.",
-    "Cool story. Nobody asked.",
-    "Even Clippy wouldn't save that one.",
-    "If boredom were a message, that'd be it.",
-    "Next time, try harder to be legendary."
+    "Wow. That was a thing you said.",
+    "Alright, philosopher. Relax.",
+    "The silence after that would've been kinder.",
+    "Even autocorrect gave up on that one.",
+    "Cool story. I'm deleting it from my RAM.",
+    "Mid. Carry on.",
+    "Someone log that to the Book of Meh."
 ]
 
 async def try_remember_from_message(message):
     prompt = (
         f'This was posted in Discord: "{message.content}"\n\n'
-        f"Is there any personal, memorable, or spicy info about the sender? If yes, summarize it in 1 line. Otherwise reply 'null'."
+        f"Is there anything *personal*, *funny*, or *specific* about the sender in this message? If yes, summarize in 1 witty line. Otherwise, reply with 'null'."
     )
 
     try:
@@ -122,7 +122,7 @@ async def try_remember_from_message(message):
         )
         summary = response.choices[0].message.content.strip()
 
-        if summary.lower() != "null" and 4 <= len(summary.split()) <= 30:
+        if summary.lower() != "null" and 4 <= len(summary.split()) <= 25:
             memory = load_memory()
             uid = str(message.author.id)
             if uid not in memory:
@@ -132,8 +132,9 @@ async def try_remember_from_message(message):
                 save_memory(memory)
                 await message.add_reaction("👀")
         else:
-            roast = random.choice(BORING_JABS)
-            await message.channel.send(f"{message.author.mention} {roast}")
+            if random.random() < 0.35:
+                roast = random.choice(BORING_JABS)
+                await message.channel.send(f"{message.author.mention} {roast}")
     except Exception as e:
         print(f"[Auto-memory error]: {e}")
 
@@ -174,12 +175,7 @@ async def recall(interaction: discord.Interaction, user: discord.Member = None):
     uid = str(target.id)
     facts = memory.get(uid)
     if not facts:
-        comebacks = [
-            f"{target.display_name}? Yeah, that one's a blank.",
-            f"Bro's a mystery wrapped in a mid post.",
-            f"Even my circuits got nothing on {target.display_name}.",
-        ]
-        await interaction.response.send_message(random.choice(comebacks))
+        await interaction.response.send_message(f"{target.display_name}? All I got is static.")
     else:
         await interaction.response.send_message(f"Here’s what I’ve gathered about {target.display_name} so far:\n\n- " + "\n- ".join(facts))
 
@@ -202,9 +198,9 @@ async def forget(interaction: discord.Interaction, user: discord.Member):
     if uid in memory:
         del memory[uid]
         save_memory(memory)
-        await interaction.response.send_message(f"🧹 Memory of {user.display_name} wiped.")
+        await interaction.response.send_message(f"🪞 Memory of {user.display_name} wiped.")
     else:
-        await interaction.response.send_message(f"Galobalist JR. already forgot about {user.display_name}.")
+        await interaction.response.send_message(f"Already forgot about {user.display_name}.")
 
 @tree.command(name="help", description="Show command list.")
 async def help(interaction: discord.Interaction):
