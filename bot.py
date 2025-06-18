@@ -1,5 +1,6 @@
 import os
 from dotenv import load_dotenv
+import random
 
 load_dotenv()
 
@@ -48,13 +49,9 @@ def get_memory_for_user(memory, user_id):
 
 # Personality system
 PERSONA_FILE = "/data/persona.json"
-DEFAULT_PERSONA = random(PERSONA_FILE)
 PERSONA_TEMPLATES_FILE = "personalities.json"
 
-if not os.path.exists(PERSONA_FILE):
-    with open(PERSONA_FILE, 'w') as f:
-        json.dump({"persona": DEFAULT_PERSONA}, f)
-
+# Step 1: create personalities file if it doesn't exist
 if not os.path.exists(PERSONA_TEMPLATES_FILE):
     default_templates = {
         "sarcastic": "You're Galobalist JR.—a dry, witty, sarcastic Discord bot who roasts users like it's your second job. Keep replies short and clever.",
@@ -64,6 +61,18 @@ if not os.path.exists(PERSONA_TEMPLATES_FILE):
     }
     with open(PERSONA_TEMPLATES_FILE, 'w') as f:
         json.dump(default_templates, f, indent=2)
+
+# Step 2: load templates, now guaranteed to exist
+with open(PERSONA_TEMPLATES_FILE, 'r') as f:
+    templates = json.load(f)
+
+# Step 3: pick a default persona
+DEFAULT_PERSONA = random.choice(list(templates.keys()))
+
+# Step 4: create persona.json if needed
+if not os.path.exists(PERSONA_FILE):
+    with open(PERSONA_FILE, 'w') as f:
+        json.dump({"persona": DEFAULT_PERSONA}, f)
 
 def get_persona():
     with open(PERSONA_FILE, 'r') as f:
@@ -96,8 +105,6 @@ User said: "{message}"
 
 Respond with as much as you feel necessary, no boundaries.
 """
-
-import random
 
 BORING_JABS = [
     "That was... breathtakingly forgettable.",
@@ -206,7 +213,7 @@ async def debugmemory(ctx):
         await ctx.send(f"Memory file contents:\n```json\n{data[:1800]}```")
     except Exception as e:
         await ctx.send(f"❌ Error reading memory file: {e}")
-        
+
 
 @bot.event
 async def on_message(message):
