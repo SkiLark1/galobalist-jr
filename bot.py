@@ -1,15 +1,21 @@
-import discord
-from discord.ext import commands
 import os
-import json
-from openai import OpenAI
 from dotenv import load_dotenv
 
 load_dotenv()
 
-# Setup
-TOKEN = os.getenv("DISCORD_TOKEN")
+# Load environment variables early for debugging
+DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 OPENAI_KEY = os.getenv("OPENAI_API_KEY")
+
+if not OPENAI_KEY:
+    print("❌ ERROR: OPENAI_API_KEY is missing.")
+else:
+    print("✅ OPENAI_API_KEY loaded successfully.")
+
+from openai import OpenAI
+import discord
+from discord.ext import commands
+import json
 client = OpenAI(api_key=OPENAI_KEY)
 
 intents = discord.Intents.default()
