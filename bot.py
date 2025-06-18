@@ -156,14 +156,16 @@ async def remember(ctx, user: discord.Member, *, fact):
     await ctx.send(f"Got it. I will forever associate @**{user.display_name}** with: \"{fact}\"")
 
 @bot.command(name='recall')
-async def recall(ctx, user: discord.Member):
+async def recall(ctx, user: discord.Member = None):
+    target = user or ctx.author
     memory = load_memory()
-    uid = str(user.id)
+    uid = str(target.id)
     facts = memory.get(uid)
+
     if not facts:
-        await ctx.send(f"Galobalist JR. knows nothing about {user.display_name}. Yet. 👀")
+        await ctx.send(f"Galobalist JR. knows nothing about {target.display_name}. Yet. 👀")
     else:
-        await ctx.send(f"Here’s what I’ve gathered about {user.display_name} so far:\n\n- " + "\n- ".join(facts))
+        await ctx.send(f"Here’s what I’ve gathered about {target.display_name} so far:\n\n- " + "\n- ".join(facts))
 
 @bot.command(name='setpersona')
 async def setpersona(ctx, *, persona):
